@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import zipfile
 from poker_bot.data import audit_zip, literal
+from poker_bot.game import compatibility_sample
 
 
 def hand(number, count=2, ante=0, unknown=True):
@@ -20,6 +21,18 @@ def hand(number, count=2, ante=0, unknown=True):
 
 
 class AuditTests(unittest.TestCase):
+    def test_compatibility_sample_keeps_unknown_cards(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / 'source.zip'
+            with zipfile.ZipFile(archive, 'w') as z:
+                z.writestr('data/handhq/test/sample.phhs',
+                           hand(1, 6) + hand(2).replace('[100, 100]', '[100, inf]', 1)
+                           + hand(3) + hand(4))
+            sample = list(compatibility_sample(archive, per_group=1))
+            self.assertEqual(len(sample), 1)
+            self.assertIn(b'hand = 3', sample[0][2])
+            self.assertIn(b'????', sample[0][2])
+
     def test_phh_nonfinite_values(self):
         import math
         stacks = literal({"starting_stacks": "[inf, inf]"}, "starting_stacks")

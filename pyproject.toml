@@ -3,7 +3,7 @@ name = "adaptive-poker-bot"
 version = "0.0.1"
 description = "An adaptive heads-up poker bot using classical machine learning"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["pokerkit==0.7.6"]
 
 [project.scripts]
 poker-bot = "poker_bot.cli:main"

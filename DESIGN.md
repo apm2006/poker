@@ -93,3 +93,20 @@ They must not be presented as updated eligible training counts.
 - The existing positive-stack validation also remains in place.
 - Handling missing metadata still requires review before training preparation.
 
+
+## Approved PokerKit compatibility experiment
+
+- Use PokerKit to check compatibility with PHH records and the project's Python
+  setup, before implementing gameplay or training-row extraction.
+- Probe dependency pinned to 0.7.6 for reproducibility; future version changes and
+  permanent gameplay integration remain open.
+- Keep full dataset exports local and ignored; only code and documentation belong
+  in Git. The local smoke-test sample is not a training export.
+- First sample: 100 finite-stack heads-up records across 20 source/stake groups.
+- PokerKit was installed by the user and the sample replay was verified locally:
+  100 successful, completed hands; 266 betting states; no replay failures.
+- Warning breakdown: 100 unexpected `time_zone_abbreviation` metadata fields and
+  two folds when the acting player had already matched the outstanding bet.
+- No metadata rewriting, warning suppression, or exclusion of warning-bearing
+  hands has been implemented. Training handling of these warnings needs review.
+- These results establish small-sample compatibility, not full-archive validation.
