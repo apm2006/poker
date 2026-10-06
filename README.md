@@ -1,4 +1,4 @@
-# Adaptive poker bot
+# PokerBot
 
 Temporary skeleton for a heads-up opponent that learns player tendencies using
 classical ML. A preliminary read-only dataset audit is implemented; training and gameplay are
