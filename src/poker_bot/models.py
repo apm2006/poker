@@ -1,3 +1,5 @@
-"""Implement classical ML training and prediction after model selection.
+"""Population action prediction with multinomial logistic regression.
 
-No algorithm, model API, or ML dependency has been selected yet."""
+Approved model direction only. Feature schema, legal-action representation,
+model API, dependencies, and training configuration await user review.
+"""
