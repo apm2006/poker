@@ -110,3 +110,63 @@ They must not be presented as updated eligible training counts.
 - No metadata rewriting, warning suppression, or exclusion of warning-bearing
   hands has been implemented. Training handling of these warnings needs review.
 - These results establish small-sample compatibility, not full-archive validation.
+
+## Approved sample decision extraction
+
+- Extract recorded fold/call/raise decisions only when the player faces a positive
+  amount to call. Pre-action features are copied before advancing replay.
+- Produce one canonical local file and action/street inspection copies following
+  the user's suggested breakdown. No separate per-action/street models selected.
+- Keep row identities and timestamps for provenance and hand-level splitting;
+  they are not approved model features.
+- Initial sample: 100 hands, 191 decisions (96 fold, 34 call, 61 raise), no hand
+  failures or inferred betting actions. Seventy-five recorded actions outside
+  the facing-bet task were skipped.
+- Tests verify known pre-action pot/stack amounts, action/street labeling,
+  partition consistency, and independence from hidden hole cards.
+- Player-history features, board-texture encodings, full-corpus export, and
+  treatment of repaired histories remain outstanding.
+
+## Approved duplicate and missing-data rules
+
+- Keep one validated copy per site and hand ID. A rejected first copy does not
+  reserve the identity; the first subsequent valid copy may be retained. Once a
+  valid copy is kept, skip further exact or conflicting copies and count them.
+- Reject the entire hand when PokerKit inserts an unrecorded betting decision
+  (check/call, fold, or raise). Automatic bookkeeping is allowed.
+- Reject missing/nonfinite essential chip values, unknown decision-time board
+  cards, inconsistent replay, and histories that do not reach completion.
+- Unknown private hole cards are allowed; they are not decision inputs.
+- Missing optional table, seats, or winnings metadata alone does not reject a hand.
+  Require a valid date/time for chronological splitting and site/hand for identity.
+- No average substitutes for missing actions, stacks, bets, or board cards.
+  Population estimates for optional player tendency statistics remain part of the
+  approved Bayesian approach; no such imputation is implemented yet.
+- These rules are implemented in the sample decision exporter. The earlier audit
+  is a conservative structural diagnostic, not the final training eligibility rule.
+- Rechecked the 100-hand sample: 100 retained, 191 decisions, no inserted betting
+  decisions. Tests cover deduplication, invalid-first/valid-second copies,
+  whole-hand rejection on inserted checks, optional metadata, and unknown boards.
+- Full archive execution remains outstanding. The original sample command stays
+  in-memory; the cached exporter below implements disk-backed streaming.
+
+## Approved persistent cache and streaming export
+
+- SQLite stores per-record hashes/outcomes, validated decision rows, duplicate
+  identities, and completed ZIP-member checkpoints. Per-member chunks hold output.
+- Namespaces include the archive SHA-256, processing-code hashes, schema version,
+  and PokerKit version, preventing reuse across incompatible inputs or logic.
+- Preserve the same approved validation rules through a shared per-hand replay
+  function used by the sample and cached exporters.
+- Commit file completion only after chunk writes are durable. Roll back current
+  file identities/outcomes on failure; completed files survive interruptions.
+- Rebuild final combined/action/street views from committed chunks. Report
+  `building` until all views are written, then mark the selected scope complete.
+- Bounded runs select a sorted source-file prefix. Omit `--max-files` for a full
+  run; no full archive run has been performed yet.
+- Cache eviction and automatic recovery from corrupted chunks are not implemented.
+  Corruption is detected and reported; a new output directory permits rebuilding.
+- Validated on 3 files: 2,998 records; 1,030 retained hands; 86 rejected;
+  2,217 decisions, including 45 river calls and 3 river raises. Repeat run reused
+  all 3 files without validation. Twenty tests cover validation and caching,
+  including interrupted chunk commits and interrupted final-output assembly.

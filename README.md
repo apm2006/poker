@@ -65,3 +65,90 @@ betting states. Warnings comprised 100 unrecognized `time_zone_abbreviation`
 metadata fields and two folds with no outstanding amount to match. Warning
 messages and counts are now included in the report. Full-dataset compatibility
 and a warning-handling policy remain unverified/unselected.
+
+## Sample decision extraction
+
+```sh
+PYTHONPATH=src .venv/bin/python -m poker_bot.cli extract-decisions data/processed/pokerkit-check.phhs
+```
+
+Outputs under ignored `data/processed/sample-decisions/`:
+
+- `decisions.jsonl`: canonical pre-action rows with fold/call/raise labels.
+- `fold/`, `call/`, `raise/`: inspection copies in preflop/flop/turn/river files.
+- `summary.json`: counts, warnings, inferred betting actions, and failures.
+
+Each row contains observable pre-decision pot, amount to call, remaining stacks,
+minimum remaining stack, position, board, prior recorded betting actions, and
+raise legality. The minimum remaining stack is calculated before the response;
+no stack-depth or pot-odds formula beyond these reported ratios is yet selected.
+Identifiers and timestamps are provenance, not model inputs. Hole cards and
+outcomes are not exported. Player-history features and board-texture encodings
+are still pending. Do not concatenate partition files with the canonical file:
+they contain the same rows. Splits must keep all decisions from a hand together.
+
+The 100-hand sample yielded 191 rows: 96 folds, 34 calls, and 61 raises, with no
+inferred betting actions and no failed hands. These are inspection data, not a
+full validated training corpus. Replay may repair omitted actions in other hands;
+those repairs are counted rather than labeled as observed player decisions.
+
+### Validated sample filtering
+
+The decision exporter now keeps the first validated copy per `(site, hand ID)`.
+Invalid copies do not prevent later valid copies from being retained. It rejects
+whole hands with inserted betting decisions, missing essential game values,
+unknown public board cards, or incomplete replay. Missing optional table, seats,
+and winnings metadata is allowed; valid date/time and hand identity are required.
+No missing game values are averaged. Source records remain unchanged.
+
+The earlier structural audit is diagnostic; it has stricter optional-metadata
+checks than the current decision exporter. Neither the audit nor the sample
+export is a complete session classification or timezone-normalization pipeline.
+The original sample command is still in-memory. Use `export-cached` for streaming
+ZIP processing and persistent checkpoints.
+
+## Cached streaming export
+
+Start with a bounded run:
+
+```sh
+PYTHONPATH=src .venv/bin/python -m poker_bot.cli export-cached /Users/apmanasani/Downloads/phh-dataset-main.zip --max-files 3
+```
+
+Repeat the same command to reuse completed source files. Increase `--max-files`
+to extend the sorted archive prefix, or omit it to process the whole archive.
+The full archive has not yet been exported.
+
+The report prints the actual output directory under ignored
+`data/processed/cached-export/<processing-version>/<archive-sha256>/`. It contains:
+
+- `cache.sqlite`: record hashes, accepted/rejected outcomes, cached decision rows,
+  selected hand identities, and completed source-file checkpoints.
+- `chunks/`: per-source-file decision and rejection logs.
+- `decisions.jsonl`, action/street directories, and `rejections.jsonl`: rebuilt
+  inspection views containing only the selected archive prefix.
+- `summary.json`: counts, cache activity, scope, and completion status.
+
+Only one hand's rows are buffered in RAM. Duplicate identities live in SQLite.
+Archives and processing code (validator, features, exporter) are hashed, and the
+PokerKit version is included, so changed inputs or logic use a fresh namespace.
+Out-of-scope player counts/variants are counted at file level without replay-cache
+entries. Rejected eligible records are cached with reasons; no missing game
+values are imputed.
+
+Chunks are flushed and synced before a file-level SQLite transaction commits.
+On interruption, completed source files are reused; the unfinished file is redone.
+Final views are reconstructed rather than appended, preventing duplicate output.
+Read them only when `summary.json` says `status: complete`; `full_archive` tells
+you whether all files were selected. Interrupted assembly leaves `status: building`.
+A smaller `--max-files` rebuilds views for that smaller prefix, not all cached files.
+
+Chunk hashes detect missing or damaged cache files; rebuild in a new output
+folder if detected. A local file lock prevents concurrent writers for one cache.
+The locking implementation supports macOS/Linux. Cache storage is persistent and
+has no automatic eviction. It duplicates some data to make recovery straightforward.
+
+Verified on three real source files: 2,998 records scanned, 1,030 accepted hands,
+86 rejected hands, and 2,217 decision rows. River decisions include 45 calls and
+3 raises. A second run reused all three checkpoints without revalidation.
+This remains a bounded validation run, not a completed training dataset.

@@ -15,10 +15,26 @@ def main() -> None:
     probe.add_argument('archive')
     probe.add_argument('--output', default='data/processed/pokerkit-check.json')
     probe.add_argument('--per-group', type=int, default=5)
+    extract = commands.add_parser('extract-decisions', help='Extract pre-action inspection rows from a PHH sample')
+    extract.add_argument('sample')
+    extract.add_argument('--output-dir', default='data/processed/sample-decisions')
+    cached = commands.add_parser('export-cached', help='Resume a versioned streaming export from a PHH ZIP')
+    cached.add_argument('archive')
+    cached.add_argument('--output-dir', default='data/processed/cached-export')
+    cached.add_argument('--max-files', type=int)
     args = parser.parse_args()
     if args.command == 'audit':
         report = audit_zip(args.archive, args.output)
         print(json.dumps(report, indent=2))
+    elif args.command == 'export-cached':
+        from .cache import export_cached
+        print(json.dumps(export_cached(args.archive, args.output_dir, args.max_files), indent=2))
+    elif args.command == 'extract-decisions':
+        from .data import extract_decisions
+        report = extract_decisions(args.sample, args.output_dir)
+        print(json.dumps(report, indent=2))
+        if report['failures'] or not report['rows']:
+            parser.exit(1)
     elif args.command == 'check-pokerkit':
         from .game import check_compatibility
         report = check_compatibility(args.archive, args.output, args.per_group)
