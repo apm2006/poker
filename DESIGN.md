@@ -201,3 +201,69 @@ rows changed in both effective-stack fields; 62,432 all-in response rows now hav
 positive actor-risk values. Output is `data/processed/effective-stack-v2/`.
 All 12 action/street counts match the original export. Source/output SHA-256
 values and original processing identity are recorded in the derived manifest.
+
+## Timestamp audit completed
+
+See `TIMESTAMP_REVIEW.md`. All 1,875,291 retained hands match source timestamps.
+The combined export has 864 backwards local-time transitions at file boundaries;
+within-file retained-hand timestamps are ordered. Source labels include ET, EDT,
+CEST, ICT, and ambiguous GMT-0910; normalization is not yet approved or applied.
+July 24–26 values exist in source records. Equal-second hands and overlapping
+hands need a conservative historical-feature update rule. No datasets were sorted
+or timestamps modified during this audit. Source metadata is indexed locally at
+`data/processed/timestamp-review/timestamp-index.sqlite` for subsequent joins.
+
+## Approved UTC-normalized derived dataset
+
+- The user approved a separate normalized/sorted copy, preserving original
+  datasets and retaining unresolved Ongame records separately.
+- Explicit interpretation: ET uses America/New_York rules; EDT is UTC-04:00,
+  CEST is UTC+02:00, ICT is UTC+07:00. ET's July 2009 offset is UTC-04:00.
+  Ambiguous/nonexistent Eastern local times raise an error rather than guessing.
+- Unknown labels (including GMT-0910) receive no UTC timestamp and go to
+  `unresolved-timezones.jsonl`; their original values remain intact.
+- UTC order is timestamp, source file, source record index, decision index.
+  Secondary keys provide stable storage order, not evidence of temporal precedence.
+- Preserve original date/time and all decision fields; add timestamp_utc,
+  raw_timezone, and timestamp_status. Resolved action/street views are also sorted.
+- Use a temporary SQLite external sort and publish the output directory only
+  after row counts, source content hash, and output ordering have been checked.
+- No split dates, player-history update rules, or history weighting are selected.
+
+The full UTC-normalized copy completed successfully: 4,225,901 ordered rows and
+9,015 unresolved rows, preserving all original rows. Twenty-five tests pass.
+All source values are intact; no train/validation/test split has been created.
+
+## Approved evaluation direction and date proposal
+
+- Three expanding-window chronological validation folds plus one untouched final
+  chronological test period, with class/street/site coverage checks. No shuffled
+  stratification or reassignment of future records into earlier blocks.
+- Keep whole hands and equal-timestamp groups in one block. Fit preprocessing on
+  training records only; history statistics may not use future observations.
+- Full UTC-date profile completed: all 4,225,901 resolved rows reconcile with the
+  normalized manifest. All proposed periods include all 12 action/street classes.
+- Exact dates are proposed in `SPLIT_PROPOSAL.md` and await approval. No split
+  assignments or trained models have been produced.
+- Historical-feature updates, overlapping-hand handling, and any purge interval
+  remain open; these are not silently determined by the date proposal.
+
+## Approved temporal split dates
+
+- Fold 1: train through July 8, validate July 9–11, 2009 UTC.
+- Fold 2: train through July 11, validate July 12–14.
+- Fold 3: train through July 14, validate July 15–17.
+- Final test: July 18–26 inclusive. Every training window begins at the earliest
+  resolved data (June 30). Endpoints are UTC midnight, end-exclusive internally.
+- Store five disjoint JSONL blocks plus a manifest listing each fold's training
+  files. This avoids duplicating the expanding training sets and keeps the final
+  test out of every fold and the final pre-test refit.
+- Preserve rows byte-for-byte and verify source hash, row counts, chronological
+  ordering, and hand/equal-timestamp block consistency before publishing.
+- History-derived features and any purge/embargo remain undecided. These split
+  assignments do not implement personalized online updates or fit preprocessing.
+
+Split creation completed: all 4,225,901 rows assigned exactly once across five
+blocks. Counts for hands, classes, action/street pairs, and sites match the
+approved profile in every block. Twenty-seven tests pass. Outputs are in
+`data/processed/temporal-splits-v1/`. No models have been fitted.

@@ -181,3 +181,67 @@ PYTHONPATH=src .venv/bin/python -m poker_bot.cli correct-effective-stacks /path/
 The command verifies row counts, hashes input/output rows, and publishes output
 only after a successful transformation. An existing destination is never reused
 or overwritten. Failures leave the source and published output untouched.
+
+## Timestamp review
+
+`TIMESTAMP_REVIEW.md` records the full retained-hand timestamp audit. Timestamps
+match the source, but the combined dataset is in source-file order, with backward
+time transitions. Do not use that order for player history or temporal splits.
+Timezone normalization and a separate sorted derived dataset remain pending.
+
+## UTC-normalized chronological copy
+
+```sh
+PYTHONPATH=src .venv/bin/python -m poker_bot.cli normalize-timestamps data/processed/effective-stack-v2 --metadata-index data/processed/timestamp-review/timestamp-index.sqlite --output-dir data/processed/chronological-v1
+```
+
+The timestamp index is the locally generated source-metadata audit artifact; it
+must match each row's source file, record index, site, hand ID, date, and time.
+The command does not replay hands. It streams rows into a temporary SQLite sort,
+checks the source manifest's hash/counts, and publishes a new directory atomically.
+Use a fresh output directory; existing datasets are never overwritten.
+
+`decisions.jsonl` and action/street files contain UTC-sorted resolved rows.
+`unresolved-timezones.jsonl` preserves records whose timezone cannot be resolved;
+it is not mixed into the chronological dataset. `summary.json` records counts,
+policy, hashes, and limitations. Original date/time fields remain unchanged;
+`timestamp_utc`, `raw_timezone`, and `timestamp_status` are added.
+
+ET means America/New_York, EDT UTC-04:00, CEST UTC+02:00, and ICT UTC+07:00.
+GMT-0910 remains unresolved. Same-time hands get a stable tie-breaker, which must
+not be used to update historical player statistics between those hands. Exact
+hand completion/action times are unavailable. Historical-feature rules and
+train/validation/test split boundaries remain pending approval.
+
+The full normalized copy is complete: 4,225,901 sorted rows; 9,015 rows kept
+separately with unresolved timezones. Counts reconcile to the original 4,234,916
+rows. All 25 tests pass. The next step is choosing chronological split boundaries
+and a leakage-safe history-update rule, not rerunning preprocessing.
+
+## Temporal coverage and proposed folds
+
+```sh
+PYTHONPATH=src .venv/bin/python -m poker_bot.cli profile-dates data/processed/chronological-v1
+```
+
+This read-only profile verifies the normalized file's hash/order and counts hands,
+actions, streets, and sites per UTC date. `SPLIT_PROPOSAL.md` records proposed
+expanding-window dates, row counts, class coverage, and site drift. Dates await
+user approval; no split files or model fits exist yet.
+
+## Approved temporal splits
+
+```sh
+PYTHONPATH=src .venv/bin/python -m poker_bot.cli create-splits data/processed/chronological-v1 --output-dir data/processed/temporal-splits-v1
+```
+
+The five disjoint blocks are `initial_training.jsonl`, `validation_1.jsonl`,
+`validation_2.jsonl`, `validation_3.jsonl`, and `final_test.jsonl`. `summary.json`
+lists each expanding-window fold's training/validation files and counts. After
+selecting settings, `final_refit_files` lists all pre-test blocks. Never include
+`final_test.jsonl` in that refit or in feature/hyperparameter selection.
+
+Rows are preserved exactly; hashes/counts/order are checked before publication.
+The source dataset is unchanged. Existing destinations are never overwritten.
+The date approval and coverage evidence are recorded in `SPLIT_PROPOSAL.md`.
+No model or feature transform has been fitted by this command.
