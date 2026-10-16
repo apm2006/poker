@@ -79,9 +79,10 @@ Outputs under ignored `data/processed/sample-decisions/`:
 - `summary.json`: counts, warnings, inferred betting actions, and failures.
 
 Each row contains observable pre-decision pot, amount to call, remaining stacks,
-minimum remaining stack, position, board, prior recorded betting actions, and
-raise legality. The minimum remaining stack is calculated before the response;
-no stack-depth or pot-odds formula beyond these reported ratios is yet selected.
+actor-risk effective stack, position, board, prior recorded betting actions, and
+raise legality. Effective stack accounts for outstanding bets and represents
+additional chips the acting player can lose. The original full export used the
+minimum remaining stack; use the corrected derived dataset described below.
 Identifiers and timestamps are provenance, not model inputs. Hole cards and
 outcomes are not exported. Player-history features and board-texture encodings
 are still pending. Do not concatenate partition files with the canonical file:
@@ -117,7 +118,8 @@ PYTHONPATH=src .venv/bin/python -m poker_bot.cli export-cached /Users/apmanasani
 
 Repeat the same command to reuse completed source files. Increase `--max-files`
 to extend the sorted archive prefix, or omit it to process the whole archive.
-The full archive has not yet been exported.
+The full archive has now been exported: 1,875,291 retained hands and 4,234,916
+decisions. See `QUALITY_REVIEW.md` for findings and remaining feature issues.
 
 The report prints the actual output directory under ignored
 `data/processed/cached-export/<processing-version>/<archive-sha256>/`. It contains:
@@ -152,3 +154,30 @@ Verified on three real source files: 2,998 records scanned, 1,030 accepted hands
 86 rejected hands, and 2,217 decision rows. River decisions include 45 calls and
 3 raises. A second run reused all three checkpoints without revalidation.
 This remains a bounded validation run, not a completed training dataset.
+
+## Corrected effective-stack dataset
+
+The user approved actor-risk semantics. Future replay exports use PokerKit's
+`get_effective_stack(actor)`. For existing heads-up, facing-bet rows, derive the
+same value without replay using:
+
+```text
+effective_stack = min(actor_stack, opponent_stack + amount_to_call)
+effective_stack_over_pot = effective_stack / pot
+```
+
+The local corrected copy lives under `data/processed/effective-stack-v2/`, with a
+canonical `decisions.jsonl`, action/street copies, and a provenance `summary.json`.
+The original cached export remains unchanged. Do not combine old and corrected
+copies when training. This fixes these two fields only; other feature preparation
+and chronological splitting remain outstanding.
+
+To generate a corrected copy in a new directory:
+
+```sh
+PYTHONPATH=src .venv/bin/python -m poker_bot.cli correct-effective-stacks /path/to/completed/export --output-dir /path/to/new/derived-output
+```
+
+The command verifies row counts, hashes input/output rows, and publishes output
+only after a successful transformation. An existing destination is never reused
+or overwritten. Failures leave the source and published output untouched.

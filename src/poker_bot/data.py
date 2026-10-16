@@ -275,3 +275,108 @@ def extract_decisions(sample_path, output_dir):
               ]}
     (output_dir / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
     return report
+
+
+def correct_effective_stacks(source_dir, output_dir):
+    """Derive versioned corrected rows without replay or modifying the source export.
+
+    This transform accepts heads-up rows facing a positive call only. Output is
+    published as a whole directory after every file and the manifest are synced.
+    An interrupted transform can be rerun; it never publishes partial results.
+    """
+    from contextlib import ExitStack
+    import os
+
+    source = Path(source_dir).resolve()
+    destination = Path(output_dir).resolve()
+    summary = json.loads((source / 'summary.json').read_text())
+    if summary.get('status') != 'complete':
+        raise ValueError('Source export must be complete')
+    if destination == source or source in destination.parents or destination in source.parents:
+        raise ValueError('Source and derived output directories must be separate')
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists():
+        raise FileExistsError('Derived output already exists; choose a new output directory')
+    counts = Counter()
+    partitions = Counter()
+    source_digest = hashlib.sha256()
+    output_digest = hashlib.sha256()
+    with tempfile.TemporaryDirectory(prefix='.effective-stack-', dir=destination.parent) as staging:
+        staging = Path(staging)
+        with ExitStack() as stack:
+            canonical = stack.enter_context((staging / 'decisions.jsonl').open('wb'))
+            files = {}
+            for label in ('fold', 'call', 'raise'):
+                for street in ('preflop', 'flop', 'turn', 'river'):
+                    path = staging / label / f'{street}.jsonl'
+                    path.parent.mkdir(exist_ok=True)
+                    files[label, street] = stack.enter_context(path.open('wb'))
+            with (source / 'decisions.jsonl').open('rb') as stream:
+                for raw in stream:
+                    source_digest.update(raw)
+                    row = json.loads(raw)
+                    actor, opponent, call, pot = (row[k] for k in ('actor_stack', 'opponent_stack', 'amount_to_call', 'pot'))
+                    if (not all(math.isfinite(x) and x >= 0 for x in (actor, opponent, call, pot))
+                            or call <= 0 or call > actor + 1e-8 or pot <= 0):
+                        raise ValueError('Expected finite, heads-up facing-bet row with a positive pot')
+                    # Call is capped at actor_stack. If the uncapped gap is larger,
+                    # the actor's stack is still the limiting term of this minimum.
+                    effective = min(actor, opponent + call)
+                    if not math.isclose(row['effective_stack'], effective, rel_tol=1e-10, abs_tol=1e-8):
+                        counts['effective_stack_changed'] += 1
+                    if not math.isclose(row['effective_stack_over_pot'], effective / pot, rel_tol=1e-10, abs_tol=1e-8):
+                        counts['effective_stack_ratio_changed'] += 1
+                    if opponent == 0:
+                        counts['facing_all_in_rows'] += 1
+                        if effective <= 0:
+                            raise ValueError('All-in response incorrectly has zero effective stack')
+                    row['effective_stack'] = effective
+                    row['effective_stack_over_pot'] = effective / pot
+                    encoded = (json.dumps(row, allow_nan=False) + '\n').encode()
+                    canonical.write(encoded)
+                    files[row['label'], row['street']].write(encoded)
+                    output_digest.update(encoded)
+                    counts['rows'] += 1
+                    partitions[f"{row['label']}/{row['street']}"] += 1
+                    if counts['rows'] % 1000000 == 0:
+                        print(f'Corrected {counts["rows"]:,} decision rows', flush=True)
+            expected = summary.get('counts', {}).get('rows', summary.get('rows'))
+            if counts['rows'] != expected:
+                raise ValueError('Source row count does not match its summary')
+            for file in (canonical, *files.values()):
+                file.flush()
+                os.fsync(file.fileno())
+        report = {
+            'status': 'complete', 'feature_schema': 'effective-stack-actor-risk-v2',
+            'transform': 'min(actor_stack, opponent_stack + amount_to_call)',
+            'source_dir': str(source), 'output_dir': str(destination),
+            'source_processing_version': summary.get('processing_version'),
+            'archive_sha256': summary.get('archive_sha256'),
+            'source_decisions_sha256': source_digest.hexdigest(),
+            'decisions_sha256': output_digest.hexdigest(),
+            'counts': dict(counts), 'partitions': dict(partitions),
+            'limitations': summary.get('limitations', []) + [
+                'Only effective_stack and effective_stack_over_pot are transformed.',
+                'Original labels, identities, ordering, and other feature values are preserved.',
+                'Player history, board texture, timezone handling, and session tags remain unfinished.',
+            ],
+        }
+        marker = staging / 'summary.json'
+        marker.write_text(json.dumps(report, indent=2) + '\n')
+        # Sync each directory before publishing the directory tree.
+        with marker.open('rb') as stream:
+            os.fsync(stream.fileno())
+        for directory in (staging, *(staging / label for label in ('fold', 'call', 'raise'))):
+            fd = os.open(directory, os.O_RDONLY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        # No existing destination is overwritten. Renaming is on the same volume.
+        os.rename(staging, destination)
+        fd = os.open(destination.parent, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    return report

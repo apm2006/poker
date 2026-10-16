@@ -22,10 +22,16 @@ def main() -> None:
     cached.add_argument('archive')
     cached.add_argument('--output-dir', default='data/processed/cached-export')
     cached.add_argument('--max-files', type=int)
+    correction = commands.add_parser('correct-effective-stacks', help='Derive corrected effective-stack features from existing decision rows')
+    correction.add_argument('source_dir')
+    correction.add_argument('--output-dir', required=True)
     args = parser.parse_args()
     if args.command == 'audit':
         report = audit_zip(args.archive, args.output)
         print(json.dumps(report, indent=2))
+    elif args.command == 'correct-effective-stacks':
+        from .data import correct_effective_stacks
+        print(json.dumps(correct_effective_stacks(args.source_dir, args.output_dir), indent=2))
     elif args.command == 'export-cached':
         from .cache import export_cached
         print(json.dumps(export_cached(args.archive, args.output_dir, args.max_files), indent=2))

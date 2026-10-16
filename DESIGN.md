@@ -170,3 +170,34 @@ They must not be presented as updated eligible training counts.
   2,217 decisions, including 45 river calls and 3 river raises. Repeat run reused
   all 3 files without validation. Twenty tests cover validation and caching,
   including interrupted chunk commits and interrupted final-output assembly.
+
+## Full archive run and quality review
+
+The user completed all 21,782 source files: 1,875,291 hands retained and 4,234,916
+decision rows. The read-only quality review is recorded in `QUALITY_REVIEW.md`.
+All rejection and warning counts reconcile. The effective-stack feature understates
+actor risk because it ignores outstanding bets; its definition/correction requires
+review before training. No export or cache data was changed by the review.
+Timezone normalization, the actual July 1–26 date range, and session classification
+remain unresolved before chronological features and splitting.
+
+## Approved actor-risk effective stack correction
+
+- Effective stack means the actor's additional amount at risk, accounting for the
+  outstanding bet. Future snapshots use PokerKit's `get_effective_stack(actor)`.
+- For existing heads-up rows facing a bet, use
+  `min(actor_stack, opponent_stack + amount_to_call)` and divide by the existing
+  pot for the associated ratio. Calls capped by the actor's stack are covered.
+- Preserve source caches/exports. Derive a separate versioned dataset, changing
+  only `effective_stack` and `effective_stack_over_pot`; preserve labels, row
+  ordering, identities, and all other features.
+- Keep combined and action/street views consistent. Publish derived output only
+  after complete transformation and row-count checks, with source/output hashes.
+- Twenty-two tests pass, including pending bets, unequal-stack all-ins, capped
+  calls, source preservation, partition consistency, and failed publication.
+
+The full derived correction completed: all 4,234,916 rows preserved; 2,217,928
+rows changed in both effective-stack fields; 62,432 all-in response rows now have
+positive actor-risk values. Output is `data/processed/effective-stack-v2/`.
+All 12 action/street counts match the original export. Source/output SHA-256
+values and original processing identity are recorded in the derived manifest.

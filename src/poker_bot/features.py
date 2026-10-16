@@ -13,7 +13,7 @@ def decision_snapshot(state, history, previous_actions):
         return None
     pot = state.total_pot_amount
     to_call = state.checking_or_calling_amount
-    effective_stack = min(state.stacks)
+    effective_stack = state.get_effective_stack(actor)
     # Heads-up PHH reverses blind posting: p2 is the button/small blind.
     return {
         'actor_index': actor,
